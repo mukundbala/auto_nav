@@ -104,7 +104,7 @@ def mover():
             # fire solenoid
             rospy.loginfo(['Firing solenoid'])
             GPIO.setmode(GPIO.BOARD)
-            solenoid_pin = 38
+            solenoid_pin = 35
             GPIO.setup(solenoid_pin, GPIO.OUT)
             GPIO.output(solenoid_pin, GPIO.HIGH)
             time.sleep(1)
