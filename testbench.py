@@ -115,6 +115,7 @@ def mover():
             pass
 
         rate.sleep()
+        pass
 
 
 if __name__ == '__main__':
