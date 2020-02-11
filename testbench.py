@@ -105,8 +105,6 @@ def mover():
             GPIO.setmode(GPIO.BOARD)
             solenoid_pin = 38
             GPIO.setup(solenoid_pin, GPIO.OUT)
-            GPIO.output(solenoid_pin, GPIO.LOW)
-            time.sleep(1)
             GPIO.output(solenoid_pin, GPIO.HIGH)
             time.sleep(1)
             GPIO.output(solenoid_pin, GPIO.LOW)
