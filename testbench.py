@@ -91,6 +91,7 @@ def mover():
             time.sleep(1)
             pub.publish(twist)
             # fire servo
+            rospy.loginfo(['Firing servo'])
             GPIO.setmode(GPIO.BOARD)
             servo_pin = 40
             GPIO.setup(servo_pin, GPIO.OUT)
@@ -102,6 +103,7 @@ def mover():
             p.stop()
             GPIO.cleanup()
             # fire solenoid
+            rospy.loginfo(['Firing solenoid'])
             GPIO.setmode(GPIO.BOARD)
             solenoid_pin = 38
             GPIO.setup(solenoid_pin, GPIO.OUT)
