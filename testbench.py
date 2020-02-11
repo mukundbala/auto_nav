@@ -101,7 +101,6 @@ def mover():
             p.ChangeDutyCycle(5)
             time.sleep(1)
             p.stop()
-            GPIO.cleanup()
             # fire solenoid
             rospy.loginfo(['Firing solenoid'])
             GPIO.setmode(GPIO.BOARD)
@@ -113,6 +112,7 @@ def mover():
             time.sleep(1)
             GPIO.cleanup()
             rate.sleep()
+            pass
 
         rate.sleep()
 
