@@ -7,15 +7,14 @@ from sensor_msgs.msg import LaserScan
 
 def callback(msg):
 	# create numpy array
-	laser_range = np.array([msg.ranges])
+	laser_range = np.array(msg.ranges)
 	# replace 0's with nan
-	lr2 = laser_range
-	lr2[lr2==0] = np.nan
+	laser_range[laser_range==0] = np.nan
 	# find index with minimum value
-	lr2i = np.nanargmin(lr2)
-	
+	lr2i = np.nanargmin(laser_range)
+
 	# log the info
-    	rospy.loginfo('Shortest distance is %i degrees', lr2i)
+        rospy.loginfo('Shortest distance at %i degrees', lr2i)
 
 
 def scanner():
@@ -27,7 +26,7 @@ def scanner():
 
 	# subscribe to LaserScan data
 	rospy.Subscriber('scan', LaserScan, callback)
-    
+
 	# wait until it is time to run again
 	rate.sleep()
 

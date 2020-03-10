@@ -15,8 +15,8 @@ laser_range = np.array([])
 occdata = []
 yaw = 0.0
 rotate_speed = 0.1
-linear_speed = 0.01
-stop_distance = 0.25
+linear_speed = 0.1
+stop_distance = 0.5
 occ_bins = [-1, 0, 100, 101]
 front_angle = 30
 front_angles = range(-front_angle,front_angle+1,1)
@@ -34,14 +34,14 @@ def get_laserscan(msg):
     global laser_range
 
     # create numpy array
-    laser_range = np.array([msg.ranges])
+    laser_range = np.array(msg.ranges)
 
 
 def get_occupancy(msg):
     global occdata
 
     # create numpy array
-    occdata = np.array([msg.data])
+    occdata = np.array(msg.data)
     # compute histogram to identify percent of bins with -1
     occ_counts = np.histogram(occdata,occ_bins)
     # calculate total number of bins
@@ -112,7 +112,6 @@ def rotatebot(rot_angle):
 def pick_direction():
     global laser_range
 
-    rospy.loginfo(['In pick_direction'])
     # publish to cmd_vel to move TurtleBot
     pub = rospy.Publisher('cmd_vel', Twist, queue_size=10)
 
@@ -123,10 +122,9 @@ def pick_direction():
     time.sleep(1)
     pub.publish(twist)
 
-    try:
+    if laser_range.size != 0:
         lr2i = np.argmax(laser_range)
-    except ValueError:
-        # in case laser_range is empty
+    else:
         lr2i = 0
 
     rospy.loginfo(['Picked direction: ' + str(lr2i)])
@@ -165,7 +163,7 @@ def mover():
 
     while not rospy.is_shutdown():
         # check distances in front of TurtleBot
-        lr2 = laser_range[0,front_angles]
+        lr2 = laser_range[front_angles]
         # distances beyond the resolution of the Lidar are returned
         # as zero, so we need to exclude those values
         lr20 = (lr2!=0).nonzero()
