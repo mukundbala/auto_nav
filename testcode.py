@@ -9,6 +9,7 @@ from geometry_msgs.msg import Twist
 import math
 import cmath
 import numpy as np
+import matplotlib.pyplot as plt
 import time
 import cv2
 from sound_play.msg import SoundRequest
@@ -17,12 +18,12 @@ from sound_play.libsoundplay import SoundClient
 laser_range = np.array([])
 occdata = np.array([])
 yaw = 0.0
-rotate_speed = 1
-linear_speed = 1
-stop_distance = 0.25
+rotate_speed = 0.5
+linear_speed = 0.08
+stop_distance = 0.4
 occ_bins = [-1, 0, 100, 101]
-front_angle = 30
-front_angles = range(-front_angle,front_angle+1,1)
+front_angle = 10
+front_angles = range(-front_angle, front_angle+1, 1)
 
 
 def get_odom_dir(msg):
@@ -41,7 +42,7 @@ def get_laserscan(msg):
     # replace 0's with nan's
     # could have replaced all values below msg.range_min, but the small values
     # that are not zero appear to be useful
-    laser_range[laser_range==0] = np.nan
+#    laser_range[laser_range==0] = np.nan
 
 
 def get_occupancy(msg):
@@ -60,50 +61,40 @@ def get_occupancy(msg):
     oc2 = msgdata + 1
     # reshape to 2D array using column order
     occdata = np.uint8(oc2.reshape(msg.info.height,msg.info.width,order='F'))
+    rospy.loginfo('occdata: ' + str(occdata))
 
 
-def rotatebot(rot_angle):
+def rotatebot(rotate):
     global yaw
 
+    if rotate >= 180:
+	rot_angle = rotate-360
+    else:
+	rot_angle = rotate
     # create Twist object
     twist = Twist()
     # set up Publisher to cmd_vel topic
-    pub = rospy.Publisher('cmd_vel_mux/input/navi', Twist, queue_size=10)
+    pub = rospy.Publisher('cmd_vel', Twist, queue_size=10)
     # set the update rate to 1 Hz
-    rate = rospy.Rate(1)
+    rate = rospy.Rate(10)
 
-    c_change = 0
-    while(c_change != 1):
-	# get current yaw angle
-	current_yaw = np.copy(yaw)
-    	# log the info
-    	rospy.loginfo(['Current: ' + str(math.degrees(current_yaw))])
-    	# we are going to use complex numbers to avoid problems when the angles go from
-    	# 360 to 0, or from -180 to 180
-    	c_yaw = complex(math.cos(current_yaw),math.sin(current_yaw))
-    	# calculate desired yaw
-    	target_yaw = current_yaw + math.radians(rot_angle)
-    	# convert to complex notation
-    	c_target_yaw = complex(math.cos(target_yaw),math.sin(target_yaw))
-    	rospy.loginfo(['Desired: ' + str(math.degrees(cmath.phase(c_target_yaw)))])
-    	# divide the two complex numbers to get the change in direction
-    	c_change = c_target_yaw / c_yaw
-    	rospy.loginfo(['Difference: ' + str(math.degrees(cmath.phase(c_change)))])
-    	# get the sign of the imaginary component to figure out which way we have to turn
-    	#c_change_dir = np.sign(c_change.imag)
-    	# set linear speed to zero so the TurtleBot rotates on the spot
-    	twist.linear.x = 0.0
-    	# set the direction to rotate
-    	twist.angular.z = 0.5
-    	# start rotation
-    	pub.publish(twist)
+    sign = np.sign(rot_angle)
+    angle_rad = math.radians((abs(rot_angle)))
+    twist.linear.x = 0
+    twist.angular.z = sign * rotate_speed * -1
+    current_angle = 0
+    time.sleep(1)
+    t0 = rospy.Time.now().to_sec()
+
+    while(current_angle < angle_rad):
+	rospy.loginfo("current_angle: %f, angle_rad: %f", current_angle, angle_rad)
+	pub.publish(twist)
+	t1 = rospy.Time.now().to_sec()
+	current_angle = 0.55*(t1-t0)
 	rate.sleep()
 
-    rospy.loginfo(['End Yaw: ' + str(math.degrees(current_yaw))])
-    # set the rotation speed to 0
     twist.angular.z = 0.0
-    # stop the rotation
-    time.sleep(1)
+    time.sleep(0.1)
     pub.publish(twist)
 
 
@@ -111,7 +102,7 @@ def pick_direction():
     global laser_range
 
     # publish to cmd_vel to move TurtleBot
-    pub = rospy.Publisher('cmd_vel_mux/input/navi', Twist, queue_size=10)
+    pub = rospy.Publisher('cmd_vel', Twist, queue_size=10)
 
     # stop moving
     twist = Twist()
@@ -121,15 +112,16 @@ def pick_direction():
     pub.publish(twist)
 
     if laser_range.size != 0:
-        # use nanargmax as there are nan's in laser_range added to replace 0's
-        lr2i = np.nanargmax(laser_range)
+	lr0 = laser_range
+	lr0[range(91, 269, 1)] = 0
+	lr2i = lr0.argmax()
+	rospy.loginfo("direction: %i", lr2i)
     else:
         lr2i = 0
 
-    rospy.loginfo(['Picked direction: ' + str(lr2i) + ' ' + str(laser_range[lr2i]) + ' m'])
 
     # rotate to that direction
-    rotatebot(lr2i)
+    rotatebot(float(lr2i))
 
     # start moving
     rospy.loginfo(['Start moving'])
@@ -143,7 +135,7 @@ def pick_direction():
 
 def stopbot():
     # publish to cmd_vel to move TurtleBot
-    pub = rospy.Publisher('cmd_vel_mux/input/navi', Twist, queue_size=10)
+    pub = rospy.Publisher('cmd_vel', Twist, queue_size=10)
 
     twist = Twist()
     twist.linear.x = 0.0
@@ -152,7 +144,7 @@ def stopbot():
     pub.publish(twist)
 
 
-def closure(mapdata):
+"""def closure(mapdata):
     # This function checks if mapdata contains a closed contour. The function
     # assumes that the raw map data from SLAM has been modified so that
     # -1 (unmapped) is now 0, and 0 (unoccupied) is now 1, and the occupied
@@ -200,7 +192,7 @@ def closure(mapdata):
         return True
     else:
         return False
-
+"""
 
 def mover():
     global laser_range
@@ -229,22 +221,12 @@ def mover():
 
     while not rospy.is_shutdown():
         if laser_range.size != 0:
-            # check distances in front of TurtleBot and find values less
-            # than stop_distance
-            lri = (laser_range[front_angles]<float(stop_distance)).nonzero()
-            rospy.loginfo('Distances: %s', str(lri))
-        else:
-            lri[0] = []
+            if any(laser_range[front_angles] < stop_distance):
+		rospy.loginfo('Stop!')
+		pick_direction()
 
-        # if the list is not empty
-        if(len(lri[0])>0):
-            rospy.loginfo(['Stop!'])
-            # find direction with the largest distance from the Lidar
-            # rotate to that direction
-            # start moving
-            pick_direction()
 
-        # check if SLAM map is complete
+"""        # check if SLAM map is complete
         if timeWritten :
             if closure(occdata) :
                 # map is complete, so save current time into file
@@ -261,7 +243,7 @@ def mover():
                 cv2.imwrite('mazemap.png',occdata)
 
         rate.sleep()
-
+"""
 
 if __name__ == '__main__':
     try:
