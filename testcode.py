@@ -20,9 +20,9 @@ occdata = np.array([])
 yaw = 0.0
 rotate_speed = 0.5
 linear_speed = 0.08
-stop_distance = 0.4
+stop_distance = 0.3
 occ_bins = [-1, 0, 100, 101]
-front_angle = 10
+front_angle = 30
 front_angles = range(-front_angle, front_angle+1, 1)
 
 
@@ -61,7 +61,7 @@ def get_occupancy(msg):
     oc2 = msgdata + 1
     # reshape to 2D array using column order
     occdata = np.uint8(oc2.reshape(msg.info.height,msg.info.width,order='F'))
-    rospy.loginfo('occdata: ' + str(occdata))
+#    rospy.loginfo('occdata: ' + str(occdata))
 
 
 def rotatebot(rotate):
@@ -81,7 +81,7 @@ def rotatebot(rotate):
     sign = np.sign(rot_angle)
     angle_rad = math.radians((abs(rot_angle)))
     twist.linear.x = 0
-    twist.angular.z = sign * rotate_speed * -1
+    twist.angular.z = sign * rotate_speed
     current_angle = 0
     time.sleep(1)
     t0 = rospy.Time.now().to_sec()
@@ -113,9 +113,26 @@ def pick_direction():
 
     if laser_range.size != 0:
 	lr0 = laser_range
-	lr0[range(91, 269, 1)] = 0
+	lr0[range(136, 224, 1)] = 0
 	lr2i = lr0.argmax()
-	rospy.loginfo("direction: %i", lr2i)
+	lr2v = lr0.max()
+	hbound = lr2v+5
+	lbound = lr2v-5
+	if lr2i+5 > 360:
+	    rangle = lr2i-355
+	else:
+	    rangle = lr2i+5
+	if lr2i-5 < 0:
+	    langle = lr2i+355
+	else:
+	    langle = lr2i-5
+	while not (lbound < lr0[langle] < hbound) and (lbound < lr20[rangle] < hbound):
+	    lr0[lr2i] = 0
+	    lr2i = lr0.argmax()
+	    lr2v = lr0.max()
+
+	rospy.loginfo("Direction picked: %i", lr2i)
+
     else:
         lr2i = 0
 
@@ -221,9 +238,16 @@ def mover():
 
     while not rospy.is_shutdown():
         if laser_range.size != 0:
-            if any(laser_range[front_angles] < stop_distance):
-		rospy.loginfo('Stop!')
-		pick_direction()
+            lri = (laser_range[front_angles] < float(stop_distance)).nonzero()
+	    rospy.loginfo('Distances: %s', str(lri))
+	else:
+	    lri[0] = []
+
+	if(len(lri[0])>0):
+	    rospy.loginfo('Stop!')
+	    pick_direction()
+
+	rate.sleep()
 
 
 """        # check if SLAM map is complete
