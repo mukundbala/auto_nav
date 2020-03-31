@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 from PIL import Image
 import time
 import cv2
+import imutils
 from sound_play.msg import SoundRequest
 from sound_play.libsoundplay import SoundClient
 
@@ -28,7 +29,23 @@ front_angle = 30
 front_angles = range(-front_angle,front_angle+1,1)
 
 
-def get_odom_dir(msg):
+class Point(object):
+
+    def __init__(self, x=0, y=0):
+        self.x = x
+        self.y = y
+
+    def __add__(self, other):
+        return Point(self.x + other.x, self.y + other.y)
+
+    def __eq__(self, other):
+        return self.x == other.x and self.y == other.y
+
+
+dir4 = [Point(0, -1), Point(0, 1), Point(1, 0), Point(-1, 0)]
+
+
+'''def get_odom_dir(msg):
     global yaw
     global botpos
 
@@ -36,7 +53,7 @@ def get_odom_dir(msg):
     orientation_list = [orientation_quat.x, orientation_quat.y, orientation_quat.z, orientation_quat.w]
     (roll, pitch, yaw) = euler_from_quaternion(orientation_list)
     botpos = msg.pose.pose.position
-
+'''
 
 def get_laserscan(msg):
     global laser_range
@@ -48,64 +65,62 @@ def get_laserscan(msg):
     # that are not zero appear to be useful
     laser_range[laser_range==0] = np.nan
 
+
 def callback(msg, tfBuffer):
-    global rotated
-    global odata
+    global grid_x, grid_y, map_h, map_w, loc
+    global yaw
+    global img
+
+    kernel = np.ones((2,2),np.uint8)
 
     occdata = np.array([msg.data])
     occ_counts = np.histogram(occdata,occ_bins)
+    map_h = msg.info.height
+    map_w = msg.info.width
     total_bins = msg.info.width * msg.info.height
     # find transform to convert map coordinates to base_link coordinates
     trans = tfBuffer.lookup_transform('map', 'base_link', rospy.Time(0))
     cur_pos = trans.transform.translation
     cur_rot = trans.transform.rotation
 
-    map_res = msg.info.resolution
-    map_origin = msg.info.origin.position
-    grid_x = round((cur_pos.x - map_origin.x) / map_res)
-    grid_y = round((cur_pos.y - map_origin.y) / map_res)
-
-    oc2 = occdata + 1
-    oc3 = (oc2>1).choose(oc2,2)
-    odata = np.uint8(oc3.reshape(msg.info.height,msg.info.width,order='F'))
-    odata[grid_x][grid_y] = 0
-    img = Image.fromarray(odata.astype(np.uint8))
-    i_centerx = msg.info.width/2
-    i_centery = msg.info.height/2
-    translation_m = np.array([[1, 0, (i_centerx-grid_y)],
-			      [0, 1, (i_centery-grid_x)],
-			      [0, 0, 1]])
-    tm_inv = np.linalg.inv(translation_m)
-    img_transformed = img.transform((msg.info.height, msg.info.width), Image.AFFINE, data=tm_inv.flatten()[:6], resample=Image.NEAREST)
     orientation_list = [cur_rot.x, cur_rot.y, cur_rot.z, cur_rot.w]
     (roll, pitch, yaw) = euler_from_quaternion(orientation_list)
 
-    rotated = img_transformed.rotate(np.degrees(-yaw)+180)
-    plt.imshow(rotated,cmap='gray')
-    plt.draw_all()
-    plt.pause(0.00000000001)
+    map_res = msg.info.resolution
+    map_origin = msg.info.origin.position
+    grid_x = int((cur_pos.x - map_origin.x) / map_res)
+    grid_y = int((cur_pos.y - map_origin.y) / map_res)
+    loc = Point(grid_x, grid_y)
+
+    oc2 = occdata + 1
+    oc3 = (oc2>1).choose(oc2,255)
+    oc4 = (oc3==1).choose(oc3,155)
+    odata = np.uint8(oc4.reshape(msg.info.height,msg.info.width,order='F'))
+    img = np.ascontiguousarray(odata, dtype=np.uint8)
+    
+    bina1 = cv2.threshold(img, 125, 255, cv2.THRESH_BINARY)
+    _, contours, _ = cv2.findContours(bina1, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+    _, nowhite = cv2.threshold(img, 255, 0, cv2.THRESH_BINARY)
+    rgb1 = cv2.cvtColor(nowhite, cv2.COLOR_GRAY2BGR)
+    for contour in contours:
+        cv2.drawContours(rgb1, contour, -1, (255,255,255),1)
+
+    _, bina2 = cv2.threshold(img,200,255, cv2.THRESH_BINARY)
+    _, contours2, _ = cv2.findContours(bina2, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+    rgb2 = cv2.cvtColor(bina2, cv2.COLOR_GRAY2BGR)
+
+    for contour in contours2:
+        cv2.drawContours(rgb2, contour, -1, (0,255,0),1)
+
+    dil1 = cv2.dilate(rgb1, kernel, iterations=3)
+    dil2 = cv2.dilate(rgb2, kernel, iterations=3)
+    diff = cv2.absdiff(dil1, dil2)
+    ero = cv2.erode(diff,kernel,iterations=3)
+
+    cv2.imshow("Tst", ero), cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
 
-"""def get_occupancy(msg):
-    global occdata
-
-    # create numpy array
-    msgdata = np.array([msg.data])
-    # compute histogram to identify percent of bins with -1
-    occ_counts = np.histogram(msgdata,occ_bins)
-    # calculate total number of bins
-    total_bins = msg.info.width * msg.info.height
-    # log the info
-    rospy.loginfo('Unmapped: %i Unoccupied: %i Occupied: %i Total: %i', occ_counts[0][0], occ_counts[0][1], occ_counts[0][2], total_bins)
-
-    # make msgdata go from 0 instead of -1, reshape into 2D
-    oc2 = msgdata + 1
-    # now change all the values above 1 to 2
-    oc3 = (oc2>1).choose(oc2,2)
-    # reshape to 2D array using column order
-    occdata = np.uint8(oc3.reshape(msg.info.height,msg.info.width,order='F'))
-
-"""
 def rotatebot(rot_angle):
     global yaw
 
@@ -166,7 +181,9 @@ def rotatebot(rot_angle):
 
 
 def pick_direction():
-    global laser_range, img, h, w
+    global laser_range, img, grid_x, grid_y, map_h, map_w, loc
+
+    #loc = Point(grid_x, grid_y)
 
     # publish to cmd_vel to move TurtleBot
     pub = rospy.Publisher('cmd_vel', Twist, queue_size=10)
@@ -178,31 +195,43 @@ def pick_direction():
     time.sleep(1)
     pub.publish(twist)
 
-    # find non-mapped area
+    # BFS
     q = []
-    v = img
-
-    q.append(s)
-    while len(q) > 0:
+    v = []
+    w = []
+    found = False
+    q.append(loc)
+    while (len(q) > 0) and found == False:
         p = q.pop(0)
-        
-        # move to p
-        pass
-
         for d in dir4:
             cell = p + d
-            if (cell.x >= 0 and cell.x <w and cell.y >= 0 and cell.y < h):
+            if (cell.x >=0 and cell.x < 384 and cell.y >= 0 and cell.y < 384 and img[cell.x][cell.y] == 255):
+                print("Hit a wall")
+                w.append(cell)
+                found = True
+            elif (cell.x >= 0 and cell.x < 384 and cell.y >= 0 and cell.y < 384 and img[cell.x][cell.y] == 155):
                 q.append(cell)
-                v[cell.y][cell.x] = v[p.y][p.x] + 1
+            elif (cell.x >= 0 and cell.x < 384 and cell.y >= 0 and cell.y < 384 and img[cell.x][cell.y] == 0):
+                v.append(cell)
+                found = True
+            else:
+                rospy.logerr("wtfffff")
 
-                parent[cell.y][cell.x] = p
-                if cell == e:
-                    break
+    print("Q")
+    for i in q:
+        print(i.x, i.y)
 
+    print("V")
+    for j in v:
+        print(j.x, j.y)
 
+    print("W")
+    for k in w:
+        print(k.x, k.y)
 
     # rotate to that direction
-    rotatebot(90)
+    dirr = math.degrees(math.atan(v[0].x/v[0].y))
+    rotatebot(dirr)
 
     # start moving
     rospy.loginfo(['Start moving'])
@@ -286,7 +315,7 @@ def mover():
     rospy.sleep(1.0)
 
     # subscribe to odometry data
-    rospy.Subscriber('odom', Odometry, get_odom_dir)
+    #rospy.Subscriber('odom', Odometry, get_odom_dir)
     # subscribe to LaserScan data
     rospy.Subscriber('scan', LaserScan, get_laserscan)
     # subscribe to map occupancy data
@@ -308,7 +337,6 @@ def mover():
     pick_direction()
 
     while not rospy.is_shutdown():
-	rospy.loginfo(str(botpos))
 	# create image from 2D array using PIL
 
         if laser_range.size != 0:
