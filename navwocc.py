@@ -31,7 +31,7 @@ front_angles = range(-front_angle,front_angle+1,1)
 
 class Point(object):
 
-    def __init__(self, x=0, y=0):
+    def __init__(self, (x, y)):
         self.x = x
         self.y = y
 
@@ -41,19 +41,21 @@ class Point(object):
     def __eq__(self, other):
         return self.x == other.x and self.y == other.y
 
+    def __sub__(self, other):
+        return Point((self.x - other.x, self.y - other.y))
 
-dir4 = [Point(0, -1), Point(0, 1), Point(1, 0), Point(-1, 0)]
+    def __mul__(self, scalar):
+        return Point((int(self.x*scalar), int(self.y*scalar)))
+
+    def midpoint(self, other):
+        return Point(((self.x + other.x)/2, (self.y + other.y)/2))
+
+    def length(self):
+        return int((math.sqrt(self.x**2 + self.y**2)))
 
 
-'''def get_odom_dir(msg):
-    global yaw
-    global botpos
+dir4 = [Point((0, -1)), Point((0, 1)), Point((1, 0)), Point((-1, 0))]
 
-    orientation_quat =  msg.pose.pose.orientation
-    orientation_list = [orientation_quat.x, orientation_quat.y, orientation_quat.z, orientation_quat.w]
-    (roll, pitch, yaw) = euler_from_quaternion(orientation_list)
-    botpos = msg.pose.pose.position
-'''
 
 def get_laserscan(msg):
     global laser_range
@@ -90,7 +92,7 @@ def callback(msg, tfBuffer):
     map_origin = msg.info.origin.position
     grid_x = int((cur_pos.x - map_origin.x) / map_res)
     grid_y = int((cur_pos.y - map_origin.y) / map_res)
-    loc = Point(grid_x, grid_y)
+    loc = Point((grid_x, grid_y))
 
     oc2 = occdata + 1
     oc3 = (oc2>1).choose(oc2,255)
@@ -98,7 +100,9 @@ def callback(msg, tfBuffer):
     odata = np.uint8(oc4.reshape(msg.info.height,msg.info.width,order='F'))
     img = np.ascontiguousarray(odata, dtype=np.uint8)
     
-    bina1 = cv2.threshold(img, 125, 255, cv2.THRESH_BINARY)
+    img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    _, bina1 = cv2.threshold(img, 125, 255, cv2.THRESH_BINARY)
     _, contours, _ = cv2.findContours(bina1, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
     _, nowhite = cv2.threshold(img, 255, 0, cv2.THRESH_BINARY)
     rgb1 = cv2.cvtColor(nowhite, cv2.COLOR_GRAY2BGR)
@@ -116,8 +120,20 @@ def callback(msg, tfBuffer):
     dil2 = cv2.dilate(rgb2, kernel, iterations=3)
     diff = cv2.absdiff(dil1, dil2)
     ero = cv2.erode(diff,kernel,iterations=3)
+    img = cv2.cvtColor(ero, cv2.COLOR_BGR2GRAY)
+    _, img = cv2.threshold(img, 148, 255, cv2.THRESH_BINARY)
+    twoff = np.where(img == 255)
+    tup = list(zip(twoff[0], twoff[1]))
+    ptmin = Point(tup[0])
+    ptmax = Point(tup[-1])
+    ptdif = ptmax - ptmin
+    ptmid = ptmax.midpoint(ptmin)
+    perp = Point((-ptdif.x, ptdif.y))
+    ptperp = ptmid - perp*(round(10.0/perp.length()))
 
-    cv2.imshow("Tst", ero), cv2.waitKey(0)
+    img[grid_x][grid_y] = 255
+    img[ptperp.x][ptperp.y] = 255
+    cv2.imshow("Tst", img), cv2.waitKey(0)
     cv2.destroyAllWindows()
 
 
@@ -195,47 +211,14 @@ def pick_direction():
     time.sleep(1)
     pub.publish(twist)
 
-    # BFS
-    q = []
-    v = []
-    w = []
-    found = False
-    q.append(loc)
-    while (len(q) > 0) and found == False:
-        p = q.pop(0)
-        for d in dir4:
-            cell = p + d
-            if (cell.x >=0 and cell.x < 384 and cell.y >= 0 and cell.y < 384 and img[cell.x][cell.y] == 255):
-                print("Hit a wall")
-                w.append(cell)
-                found = True
-            elif (cell.x >= 0 and cell.x < 384 and cell.y >= 0 and cell.y < 384 and img[cell.x][cell.y] == 155):
-                q.append(cell)
-            elif (cell.x >= 0 and cell.x < 384 and cell.y >= 0 and cell.y < 384 and img[cell.x][cell.y] == 0):
-                v.append(cell)
-                found = True
-            else:
-                rospy.logerr("wtfffff")
-
-    print("Q")
-    for i in q:
-        print(i.x, i.y)
-
-    print("V")
-    for j in v:
-        print(j.x, j.y)
-
-    print("W")
-    for k in w:
-        print(k.x, k.y)
 
     # rotate to that direction
-    dirr = math.degrees(math.atan(v[0].x/v[0].y))
-    rotatebot(dirr)
+    #dirr = math.degrees(math.atan(v[0].x/v[0].y))
+    #rotatebot(dirr)
 
     # start moving
     rospy.loginfo(['Start moving'])
-    twist.linear.x = linear_speed
+    #twist.linear.x = linear_speed
     twist.angular.z = 0.0
     # not sure if this is really necessary, but things seem to work more
     # reliably with this

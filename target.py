@@ -104,11 +104,11 @@ if __name__ == '__main__':
 		colourLower = (170, 100, 0)
 		colourUpper = (180, 255, 255)
 	elif coloor == "green":
-		colourLower = (50, 100, 0)
-		colourUpper = (70, 255, 255)
+		colourLower = (40, 100, 0)
+		colourUpper = (80, 255, 255)
 	elif coloor == "blue":
-		colourLower = (110, 100, 0)
-		colourUpper = (130, 255, 255)
+		colourLower = (100, 80, 0)
+		colourUpper = (140, 255, 255)
 	else:
 		rospy.loginfo("Color Invalid")
 	rospy.init_node('target_acquisition', anonymous=False)
