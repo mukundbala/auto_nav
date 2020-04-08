@@ -36,7 +36,7 @@ class Point(object):
         self.y = y
 
     def __add__(self, other):
-        return Point(self.x + other.x, self.y + other.y)
+        return Point((self.x + other.x, self.y + other.y))
 
     def __eq__(self, other):
         return self.x == other.x and self.y == other.y
@@ -53,8 +53,19 @@ class Point(object):
     def length(self):
         return int((math.sqrt(self.x**2 + self.y**2)))
 
+    def iswithin(self, other):
+        return (other.x-10 <= self.x <= other.x+10) and (other.y-10 <= self.y <= other.y+10)
+
 
 dir4 = [Point((0, -1)), Point((0, 1)), Point((1, 0)), Point((-1, 0))]
+
+
+def get_odom_dir(msg):
+    global yaw
+
+    orientation_quat =  msg.pose.pose.orientation
+    orientation_list = [orientation_quat.x, orientation_quat.y, orientation_quat.z, orientation_quat.w]
+    (roll, pitch, yaw) = euler_from_quaternion(orientation_list)
 
 
 def get_laserscan(msg):
@@ -69,14 +80,14 @@ def get_laserscan(msg):
 
 
 def callback(msg, tfBuffer):
-    global grid_x, grid_y, map_h, map_w, loc
-    global yaw
-    global img
-
-    kernel = np.ones((2,2),np.uint8)
-
+    global odata, loc
+    
     occdata = np.array([msg.data])
     occ_counts = np.histogram(occdata,occ_bins)
+    oc2 = occdata + 1
+    oc3 = (oc2>1).choose(oc2,255)
+    oc4 = (oc3==1).choose(oc3,155)
+    odata = np.uint8(oc4.reshape(msg.info.height,msg.info.width,order='F'))
     map_h = msg.info.height
     map_w = msg.info.width
     total_bins = msg.info.width * msg.info.height
@@ -85,19 +96,20 @@ def callback(msg, tfBuffer):
     cur_pos = trans.transform.translation
     cur_rot = trans.transform.rotation
 
-    orientation_list = [cur_rot.x, cur_rot.y, cur_rot.z, cur_rot.w]
-    (roll, pitch, yaw) = euler_from_quaternion(orientation_list)
-
     map_res = msg.info.resolution
     map_origin = msg.info.origin.position
     grid_x = int((cur_pos.x - map_origin.x) / map_res)
     grid_y = int((cur_pos.y - map_origin.y) / map_res)
     loc = Point((grid_x, grid_y))
 
-    oc2 = occdata + 1
-    oc3 = (oc2>1).choose(oc2,255)
-    oc4 = (oc3==1).choose(oc3,155)
-    odata = np.uint8(oc4.reshape(msg.info.height,msg.info.width,order='F'))
+
+
+def findpoint():
+    global odata, loc, q
+
+    kernel = np.ones((2,2),np.uint8)
+    q = list()
+        
     img = np.ascontiguousarray(odata, dtype=np.uint8)
     
     img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
@@ -128,24 +140,60 @@ def callback(msg, tfBuffer):
     ptmax = Point(tup[-1])
     ptdif = ptmax - ptmin
     ptmid = ptmax.midpoint(ptmin)
-    perp = Point((-ptdif.x, ptdif.y))
-    ptperp = ptmid - perp*(round(10.0/perp.length()))
+    perp = Point((-ptdif.y, ptdif.x))
+    ptperp = ptmid - perp*(8.0/perp.length())
+    ptperp2 = ptmid + perp*(8.0/perp.length())
 
-    img[grid_x][grid_y] = 255
-    img[ptperp.x][ptperp.y] = 255
-    cv2.imshow("Tst", img), cv2.waitKey(0)
+    if bina1[ptperp.x][ptperp.y] == 255:
+        q.append(ptperp)
+        q.append(ptperp2)
+        img[ptperp.x][ptperp.y] = 255
+    else: 
+        q.append(ptperp2)
+        q.append(ptperp)
+        img[ptperp2.x][ptperp2.y] = 255
+
+    for i in q:
+        print(i.x, i.y)
+
+    img[loc.x][loc.y] = 255
+    cv2.imshow("final", img)
+    cv2.waitKey(0)
     cv2.destroyAllWindows()
+
+
+def movebot(goal):
+    global loc
+
+    pub = rospy.Publisher('cmd_vel', Twist, queue_size=10)
+    rate = rospy.Rate(10)
+    twist = Twist()
+    dist = goal - loc
+    s = dist.length()
+    twist.linear.x = 0.15
+    twist.angular.z = 0.0
+    pub.publish(twist)
+    time.sleep(s/10)
+    
+    # stop moving
+    twist = Twist()
+    twist.linear.x = 0.0
+    twist.angular.z = 0.0
+    time.sleep(1)
+    pub.publish(twist)
 
 
 def rotatebot(rot_angle):
     global yaw
+
+    rospy.on_shutdown(stopbot)
 
     # create Twist object
     twist = Twist()
     # set up Publisher to cmd_vel topic
     pub = rospy.Publisher('cmd_vel', Twist, queue_size=10)
     # set the update rate to 1 Hz
-    rate = rospy.Rate(1)
+    rate = rospy.Rate(10)
 
     # get current yaw angle
     current_yaw = np.copy(yaw)
@@ -155,7 +203,7 @@ def rotatebot(rot_angle):
     # 360 to 0, or from -180 to 180
     c_yaw = complex(math.cos(current_yaw),math.sin(current_yaw))
     # calculate desired yaw
-    target_yaw = current_yaw + math.radians(rot_angle)
+    target_yaw = rot_angle
     # convert to complex notation
     c_target_yaw = complex(math.cos(target_yaw),math.sin(target_yaw))
     rospy.loginfo(['Desired: ' + str(math.degrees(cmath.phase(c_target_yaw)))])
@@ -192,38 +240,55 @@ def rotatebot(rot_angle):
     # set the rotation speed to 0
     twist.angular.z = 0.0
     # stop the rotation
-    time.sleep(1)
     pub.publish(twist)
 
 
 def pick_direction():
-    global laser_range, img, grid_x, grid_y, map_h, map_w, loc
+    global laser_range, loc, q, yaw
+    rate = rospy.Rate(10)
 
-    #loc = Point(grid_x, grid_y)
-
+    moveee = True
+    s = Point((0,0))
     # publish to cmd_vel to move TurtleBot
     pub = rospy.Publisher('cmd_vel', Twist, queue_size=10)
 
     # stop moving
-    twist = Twist()
-    twist.linear.x = 0.0
-    twist.angular.z = 0.0
+    botspeed = Twist()
+    botspeed.linear.x = 0.0
+    botspeed.angular.z = 0.0
     time.sleep(1)
-    pub.publish(twist)
+    pub.publish(botspeed)
 
+    findpoint()
 
-    # rotate to that direction
-    #dirr = math.degrees(math.atan(v[0].x/v[0].y))
-    #rotatebot(dirr)
+    while q != []:
+        s = q.pop()
+        
+        while not loc.iswithin(s):
+            dirr = s - loc
+            angle2s = math.atan2(dirr.y, dirr.x)
+            print("angle: ", angle2s)
+            print("current: ", yaw)
+            rotatebot(angle2s)
+            print("DONE ROTATING")
+            movebot(s)
+            print("DONE MOVING")
+
+        findpoint()
+
+    botspeed.linear.x = 0
+    botspeed.angular.z = 0
+    pub.publish(botspeed)
+    rospy.logwarn("Reached end")
 
     # start moving
-    rospy.loginfo(['Start moving'])
+    #rospy.loginfo(['Start moving'])
     #twist.linear.x = linear_speed
-    twist.angular.z = 0.0
+    #twist.angular.z = 0.0
     # not sure if this is really necessary, but things seem to work more
     # reliably with this
-    time.sleep(1)
-    pub.publish(twist)
+    #time.sleep(1)
+    #pub.publish(twist)
 
 
 def stopbot():
@@ -295,10 +360,10 @@ def mover():
 
     tfBuffer = tf2_ros.Buffer()
     tfListener = tf2_ros.TransformListener(tfBuffer)
-    rospy.sleep(1.0)
+    rospy.sleep(1)
 
     # subscribe to odometry data
-    #rospy.Subscriber('odom', Odometry, get_odom_dir)
+    rospy.Subscriber('odom', Odometry, get_odom_dir)
     # subscribe to LaserScan data
     rospy.Subscriber('scan', LaserScan, get_laserscan)
     # subscribe to map occupancy data
@@ -319,44 +384,45 @@ def mover():
     # rotate to that direction, and start moving
     pick_direction()
 
-    while not rospy.is_shutdown():
-	# create image from 2D array using PIL
-
-        if laser_range.size != 0:
-            # check distances in front of TurtleBot and find values less
-            # than stop_distance
-            lri = (laser_range[front_angles]<float(stop_distance)).nonzero()
-            rospy.loginfo('Distances: %s', str(lri)[1:-1])
-        else:
-            lri[0] = []
-
-        # if the list is not empty
-        if(len(lri[0])>0):
-            rospy.loginfo(['Stop!'])
-            # find direction with the largest distance from the Lidar
-            # rotate to that direction
-            # start moving
-            pick_direction()
-
-        # check if SLAM map is complete
-        if timeWritten :
-            if closure(odata) :
-                # map is complete, so save current time into file
-                with open("maptime.txt", "w") as f:
-                    f.write("Elapsed Time: " + str(time.time() - start_time))
-                timeWritten = 1
-                # play a sound
-                soundhandle = SoundClient()
-                rospy.sleep(1)
-                soundhandle.stopAll()
-                soundhandle.play(SoundRequest.NEEDS_UNPLUGGING)
-                rospy.sleep(2)
-                # save the map
-                cv2.imwrite('mazemap.png',odata)
-
-        rate.sleep()
-
     rospy.spin()
+
+    '''while not rospy.is_shutdown():
+                # create image from 2D array using PIL
+            
+                    if laser_range.size != 0:
+                        # check distances in front of TurtleBot and find values less
+                        # than stop_distance
+                        lri = (laser_range[front_angles]<float(stop_distance)).nonzero()
+                        rospy.loginfo('Distances: %s', str(lri)[1:-1])
+                    else:
+                        lri[0] = []
+            
+                    # if the list is not empty
+                    if(len(lri[0])>0):
+                        rospy.loginfo(['Stop!'])
+                        # find direction with the largest distance from the Lidar
+                        # rotate to that direction
+                        # start moving
+                        pick_direction()
+            
+                    # check if SLAM map is complete
+                    if timeWritten:
+                        if closure(odata):
+                            # map is complete, so save current time into file
+                            with open("maptime.txt", "w") as f:
+                                f.write("Elapsed Time: " + str(time.time() - start_time))
+                            timeWritten = 1
+                            # play a sound
+                            soundhandle = SoundClient()
+                            rospy.sleep(1)
+                            soundhandle.stopAll()
+                            soundhandle.play(SoundRequest.NEEDS_UNPLUGGING)
+                            rospy.sleep(2)
+                            # save the map
+                            cv2.imwrite('mazemap.png',odata)
+            
+                    rate.sleep()
+            '''
 
 
 if __name__ == '__main__':
