@@ -102,7 +102,7 @@ def callback(msg, tfBuffer):
 
 
 def findpoint():
-    global odata, loc, q
+    global odata, loc, q, start_time
 
     kernel = np.ones((2,2),np.uint8)
     q = list()
@@ -166,8 +166,13 @@ def findpoint():
     try:
         ptmin = Point((endpts[0][0], endpts[1][0]))
     except IndexError as e:
+        rospy.logerr('Mapping Complete')
+        stopbot()
+        with open("maptime.txt", "w") as f:
+            f.write("Elapsed Time: " + str(time.time() - start_time))
         cv2.imwrite('mazemap.png',odata)
-        rospy.signal_shutdown('Mapping complete')
+        print('Press CTRL+C to quit')
+        time.sleep(10000000000)
 
     try:
         ptmax = Point((endpts[0][1], endpts[1][1]))
@@ -192,12 +197,12 @@ def findpoint():
         ptperp2 = ptmid + perp*(10.0/perp.length())
         dist = ptperp - loc
         norm = Point((-dist.y, dist.x))
-        first = loc + norm*(30.0/norm.length())
+        first = loc + norm*(10.0/norm.length())
         if bina1[first.x][first.y] != 255:
             first = loc - norm*(10.0/norm.length())
         dist2 = ptperp2 - loc
         norm2 = Point((-dist2.y, dist2.x))
-        first2 = loc + norm2*(30.0/norm2.length())
+        first2 = loc + norm2*(10.0/norm2.length())
         if bina1[first2.x][first2.y] != 255:
             first2 = loc - norm2*(10.0/norm2.length())
 
@@ -388,7 +393,7 @@ def closure(mapdata):
 
 
 def mover():
-    global laser_range
+    global laser_range, start_time
     global botpos
 
     rospy.init_node('mover', anonymous=True)
@@ -417,7 +422,9 @@ def mover():
 
     # find direction with the largest distance from the Lidar,
     # rotate to that direction, and start moving
-    pick_direction()
+    while not rospy.is_shutdown():
+        pick_direction()
+        rate.sleep()
 
     rospy.spin()
 
