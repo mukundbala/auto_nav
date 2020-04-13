@@ -6,6 +6,8 @@ from nav_msgs.msg import OccupancyGrid
 from sensor_msgs.msg import LaserScan
 from tf.transformations import euler_from_quaternion
 from geometry_msgs.msg import Twist
+import actionlib
+from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 import tf2_ros
 import math
 import cmath
@@ -23,9 +25,9 @@ occdata = np.array([])
 yaw = 0.0
 rotate_speed = 0.5
 linear_speed = 0.1
-stop_distance = 0.5
+stop_distance = 0.4
 occ_bins = [-1, 0, 100, 101]
-front_angle = 25
+front_angle = 28
 front_angles = range(-front_angle,front_angle+1,1)
 
 
@@ -197,22 +199,22 @@ def findpoint():
         ptperp2 = ptmid + perp*(10.0/perp.length())
         dist = ptperp - loc
         norm = Point((-dist.y, dist.x))
-        first = loc + norm*(10.0/norm.length())
-        if bina1[first.x][first.y] != 255:
-            first = loc - norm*(10.0/norm.length())
+        #first = loc + norm*(10.0/norm.length())
+        #if bina1[first.x][first.y] != 255:
+            #first = loc - norm*(10.0/norm.length())
         dist2 = ptperp2 - loc
         norm2 = Point((-dist2.y, dist2.x))
-        first2 = loc + norm2*(10.0/norm2.length())
-        if bina1[first2.x][first2.y] != 255:
-            first2 = loc - norm2*(10.0/norm2.length())
+        #first2 = loc + norm2*(10.0/norm2.length())
+        #if bina1[first2.x][first2.y] != 255:
+            #first2 = loc - norm2*(10.0/norm2.length())
 
         if bina1[ptperp.x][ptperp.y] == 255:
-            q.append(first)
+            #q.append(first)
             q.append(ptperp)
             q.append(ptperp2)
             #img[ptperp.x][ptperp.y] = 255
         else: 
-            q.append(first2)
+            #q.append(first2)
             q.append(ptperp2)
             q.append(ptperp)
             #img[ptperp2.x][ptperp2.y] = 255
@@ -308,9 +310,33 @@ def rotatebot(rot_angle):
     # stop the rotation
     pub.publish(twist)
 
+def moveto(s):
+
+    client = actionlib.SimpleActionClient('move_base', MoveBaseAction)
+    wait = client.wait_for_server(rospy.Duration(5))
+
+    if not wait:
+        rospy.logerr("Cannot connect to movebase")
+
+    goal = MoveBaseGoal()
+    goal.target_pose.header.frame_id = "map"
+    goal.target_pose.header.stamp = rospy.Time.now()
+    goal.target_pose.pose.position.x = s.x
+    goal.target_pose.pose.position.y = s.y
+    
+    client.send_goal(goal)
+
+    wait = client.wait_for_result()
+
+    if not wait:
+        rospy.logerr("this never happens lmao")
+    else:
+        return client.get_result()
+
 
 def pick_direction():
     global laser_range, loc, q, yaw
+    
     rate = rospy.Rate(10)
 
     moveee = True
@@ -330,11 +356,12 @@ def pick_direction():
     while q != []:
         s = q.pop()
         dirr = s - loc
-        angle2s = math.atan2(dirr.y, dirr.x)
-        rotatebot(angle2s)
+        moveto(dirr)
+        '''angle2s = math.atan2(dirr.y, dirr.x)
+        rotatebot(-angle2s)
         rospy.loginfo('Rotation Complete')
         movebot(s)
-        rospy.loginfo('Move Complete')
+        rospy.loginfo('Move Complete')'''
 
         findpoint()
 
