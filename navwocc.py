@@ -250,9 +250,9 @@ def pick_direction():
     # Once the queue is empty, we have completed mapping. 
     rospy.logerr('Mapping completed in ' + str(time.time() - start_time))
     stopbot()
-    with open("maptime.txt", "w") as f:
+    with open("Group4MapTime.txt", "w") as f:
         f.write("Elapsed Time: " + str(time.time() - start_time))
-    cv2.imwrite('mazemap.png',odata)
+    cv2.imwrite('Group4MazeMap.png',odata)
     rospy.signal_shutdown("Shutting down")
     
 
