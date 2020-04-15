@@ -207,7 +207,7 @@ def moveto(p):
         rospy.logerr("Cannot connect to movebase")
         rospy.signal_shutdown("Server not available")
 
-    rospy.loginfo("Moving")
+    rospy.loginfo("Started server")
     goal = MoveBaseGoal()
     goal.target_pose.header.frame_id = "map"
     goal.target_pose.header.stamp = rospy.Time.now()
@@ -216,6 +216,7 @@ def moveto(p):
     goal.target_pose.pose.orientation.w = p.d
     client.send_goal(goal)
     client.wait_for_result()
+    rospy.loginfo("Moving")
     return
     
 
@@ -243,6 +244,7 @@ def pick_direction():
             #print('('str(i.x) + ' ' + str(i.y) + ')')
         s = q.pop()
         moveto(s)
+        rospy.loginfo('Finding next target')
         findpoint()
 
     # Once the queue is empty, we have completed mapping. 
