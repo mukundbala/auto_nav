@@ -24,11 +24,16 @@ def shoot():
     GPIO.output(motor_pin, GPIO.LOW)
     p.stop
     GPIO.cleanup()
+<<<<<<< HEAD
     time.sleep(100)
+=======
+    rospy.signal_shutdown("Shutting down")
+
+>>>>>>> d716752ed07714f8cec17da638ea854bc8686c30
 
 
 if __name__ == '__main__':
-    rospy.init_node('pi_sub', anonymous=False)
+    rospy.init_node('pi_sub', anonymous=False disable_signals=True)
     rospy.loginfo("Node Initialised")
     while not go:
         sub = rospy.wait_for_message('tilt', String)
