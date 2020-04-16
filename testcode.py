@@ -19,10 +19,10 @@ laser_range = np.array([])
 occdata = np.array([])
 yaw = 0.0
 rotate_speed = 0.5
-linear_speed = 0.08
+linear_speed = 0.1
 stop_distance = 0.4
 occ_bins = [-1, 0, 100, 101]
-front_angle = 10
+front_angle = 30
 front_angles = range(-front_angle, front_angle+1, 1)
 
 
@@ -61,7 +61,7 @@ def get_occupancy(msg):
     oc2 = msgdata + 1
     # reshape to 2D array using column order
     occdata = np.uint8(oc2.reshape(msg.info.height,msg.info.width,order='F'))
-    rospy.loginfo('occdata: ' + str(occdata))
+#    rospy.loginfo('occdata: ' + str(occdata))
 
 
 def rotatebot(rotate):
@@ -75,24 +75,25 @@ def rotatebot(rotate):
     twist = Twist()
     # set up Publisher to cmd_vel topic
     pub = rospy.Publisher('cmd_vel', Twist, queue_size=10)
-    # set the update rate to 1 Hz
+    # set the update rate to 10 Hz
     rate = rospy.Rate(10)
 
     sign = np.sign(rot_angle)
     angle_rad = math.radians((abs(rot_angle)))
-    twist.linear.x = 0
-    twist.angular.z = sign * rotate_speed * -1
+    twist.linear.x = 0.0
+    twist.angular.z = sign * rotate_speed
     current_angle = 0
     time.sleep(1)
     t0 = rospy.Time.now().to_sec()
 
     while(current_angle < angle_rad):
-	rospy.loginfo("current_angle: %f, angle_rad: %f", current_angle, angle_rad)
+	rospy.loginfo("current angle: %f, desired angle: %f", current_angle, angle_rad)
 	pub.publish(twist)
 	t1 = rospy.Time.now().to_sec()
 	current_angle = 0.55*(t1-t0)
 	rate.sleep()
 
+    rospy.loginfo('Stopped rotation')
     twist.angular.z = 0.0
     time.sleep(0.1)
     pub.publish(twist)
@@ -108,14 +109,31 @@ def pick_direction():
     twist = Twist()
     twist.linear.x = 0.0
     twist.angular.z = 0.0
-    time.sleep(1)
+    time.sleep(0.1)
     pub.publish(twist)
 
     if laser_range.size != 0:
 	lr0 = laser_range
-	lr0[range(91, 269, 1)] = 0
+	lr0[range(101, 259, 1)] = 0
 	lr2i = lr0.argmax()
-	rospy.loginfo("direction: %i", lr2i)
+	lr2v = lr0.max()
+	hbound = lr2v+0.2
+	lbound = lr2v-0.2
+	if lr2i+10 > 360:
+	    rangle = lr2i-350
+	else:
+	    rangle = lr2i+10
+	if lr2i-10 < 0:
+	    langle = lr2i+350
+	else:
+	    langle = lr2i-10
+	while not (lbound < lr0[langle] < hbound) and (lbound < lr0[rangle] < hbound):
+	    lr0[lr2i] = 0
+	    lr2i = lr0.argmax()
+	    lr2v = lr0.max()
+
+	rospy.loginfo("Direction picked: %i, distance: %f", lr2i, lr2v)
+
     else:
         lr2i = 0
 
@@ -221,9 +239,16 @@ def mover():
 
     while not rospy.is_shutdown():
         if laser_range.size != 0:
-            if any(laser_range[front_angles] < stop_distance):
-		rospy.loginfo('Stop!')
-		pick_direction()
+            lri = (laser_range[front_angles] < float(stop_distance)).nonzero()
+	    rospy.loginfo('Distances: %s', str(lri))
+	else:
+	    lri[0] = []
+
+	if(len(lri[0])>0):
+	    rospy.loginfo('Stop!')
+	    pick_direction()
+
+	rate.sleep()
 
 
 """        # check if SLAM map is complete
