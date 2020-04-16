@@ -52,26 +52,26 @@ def get_laserscan(msg):
 def move_forward():
     global laser_range
 
-    # pub = rospy.Publisher('cmd_vel', Twist, queue_size=10)
-    # rate = rospy.Rate(5)
+    pub = rospy.Publisher('cmd_vel', Twist, queue_size=10)
+    rate = rospy.Rate(5)
 
-    # twist = Twist()
-    # twist.linear.x = 0.05
-    # twist.angular.z = 0.0
-    # time.sleep(1)
-    # pub.publish(twist)
+    twist = Twist()
+    twist.linear.x = 0.05
+    twist.angular.z = 0.0
+    time.sleep(1)
+    pub.publish(twist)
 
-    # while True:
-    #     #rospy.loginfo("inside while loop")
-    #     lr2 = (laser_range[range(0, 7, 1)]<0.2).nonzero()
-    #     print(lr2[0])
-    #     if len(lr2[0]) > 0:
-    #         #rospy.loginfo("exited loop")
-    #         break
+    while True:
+        #rospy.loginfo("inside while loop")
+        lr2 = (laser_range[range(0, 5, 1)]<0.2).nonzero()
+        # print(lr2[0])
+        if len(lr2[0]) > 0:
+            #rospy.loginfo("exited loop")
+            break
 
-    # twist.linear.x = 0
-    # twist.angular.z = 0
-    # pub.publish(twist)
+    twist.linear.x = 0
+    twist.angular.z = 0
+    pub.publish(twist)
     os.system("rosnode kill /turtlebot3_lds")
     rospy.loginfo("Finished moving")
 
@@ -124,26 +124,6 @@ class TargetDetector:
         pub.publish(twist)
         tilt.publish('True')
 
-
-    def tilt(self):
-        global cY
-
-        tilt_angle = math.degrees(math.atan(cY / 1000))
-        print(tilt_angle)
-        GPIO.setmode(GPIO.BOARD)
-        servo_pin = 12
-        GPIO.setup(servo_pin, GPIO.OUT)
-        p = GPIO.PWM(servo_pin, 50)
-        actual = 2.5 + (70 * 10 /180)
-        p.start(actual)
-        p.ChangeDutyCycle(actual)
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setup(21, GPIO.OUT)
-        GPIO.output(21, GPIO.HIGH)
-        time.sleep(6)
-        GPIO.output(21, GPIO.LOW)
-        GPIO.cleanup()
-        
 
     def callback(self, data):
         global cX, cY
@@ -205,8 +185,8 @@ if __name__ == '__main__':
     print("Enter color:")
     coloor = raw_input()
     if coloor == "red":
-        colourLower = (170, 100, 0)
-        colourUpper = (180, 255, 255)
+        colourLower = (0, 25, 0)
+        colourUpper = (20, 255, 255)
     elif coloor == "green":
         colourLower = (40, 100, 0)
         colourUpper = (80, 255, 255)
