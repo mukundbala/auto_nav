@@ -10,19 +10,21 @@ go = False
 servo_pin = 12
 motor_pin = 40
 
-def shoot():  
+def shoot():
     GPIO.setmode(GPIO.BOARD)
     GPIO.setup(servo_pin, GPIO.OUT)
     p = GPIO.PWM(servo_pin, 50)
     actual = 2.5 + (70 * 10 /180)
     p.start(actual)
-    p.ChangeDutyCycle(actual)
+    #p.ChangeDutyCycle(actual)
+    time.sleep(2)
     GPIO.setup(motor_pin, GPIO.OUT)
     GPIO.output(motor_pin, GPIO.HIGH)
-    time.sleep(6)
+    time.sleep(12)
     GPIO.output(motor_pin, GPIO.LOW)
     p.stop
     GPIO.cleanup()
+    time.sleep(100)
 
 
 if __name__ == '__main__':
