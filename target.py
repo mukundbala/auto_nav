@@ -61,14 +61,15 @@ def move_forward():
     time.sleep(1)
     pub.publish(twist)
 
-    while True:
-        #rospy.loginfo("inside while loop")
-        lr2 = (laser_range[range(0, 5, 1)]<0.2).nonzero()
-        # print(lr2[0])
-        if len(lr2[0]) > 0:
-            #rospy.loginfo("exited loop")
-            break
+    # while True:
+    #     #rospy.loginfo("inside while loop")
+    #     lr2 = (laser_range[range(0, 5, 1)]<0.2).nonzero()
+    #     # print(lr2[0])
+    #     if len(lr2[0]) > 0:
+    #         #rospy.loginfo("exited loop")
+    #         break
 
+    time.sleep(7)
     twist.linear.x = 0
     twist.angular.z = 0
     pub.publish(twist)
@@ -122,7 +123,9 @@ class TargetDetector:
         twist.angular.z = 0
         time.sleep(0.5)
         pub.publish(twist)
+        os.system("rosnode kill /raspicam_node")
         tilt.publish('True')
+        rospy.loginfo("Now firing")
 
 
     def callback(self, data):
