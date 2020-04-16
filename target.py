@@ -123,7 +123,6 @@ class TargetDetector:
         time.sleep(0.5)
         pub.publish(twist)
         tilt.publish('True')
-        
 
 
     def tilt(self):
