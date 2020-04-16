@@ -24,12 +24,8 @@ def shoot():
     GPIO.output(motor_pin, GPIO.LOW)
     p.stop
     GPIO.cleanup()
-<<<<<<< HEAD
     time.sleep(100)
-=======
     rospy.signal_shutdown("Shutting down")
-
->>>>>>> d716752ed07714f8cec17da638ea854bc8686c30
 
 
 if __name__ == '__main__':
@@ -40,6 +36,5 @@ if __name__ == '__main__':
         if sub.data == 'True':
             rospy.loginfo("Shooting")
             break
-        
     shoot()
     rospy.spin()
