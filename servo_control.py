@@ -25,13 +25,16 @@ def shoot():
     p.stop
     GPIO.cleanup()
 
+
 if __name__ == '__main__':
-    rospy.init_node('pi_side', anonymous=False)
+    rospy.init_node('pi_sub', anonymous=False)
     rospy.loginfo("Node Initialised")
     while not go:
-        sub = rospy.wait_for_message("/tilt", String)
-        print(sub)
-        if sub == 'True':
+        sub = rospy.wait_for_message('tilt', String)
+        print(sub.data)
+        if sub.data == 'True':
+            rospy.loginfo("Breaking")
             break
+        
     shoot()
     rospy.spin()
