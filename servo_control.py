@@ -8,7 +8,7 @@ from std_msgs.msg import String
 
 go = False
 servo_pin = 12
-motor_pin = 21
+motor_pin = 40
 
 def shoot():  
     GPIO.setmode(GPIO.BOARD)
@@ -17,7 +17,6 @@ def shoot():
     actual = 2.5 + (70 * 10 /180)
     p.start(actual)
     p.ChangeDutyCycle(actual)
-    GPIO.setmode(GPIO.BCM)
     GPIO.setup(motor_pin, GPIO.OUT)
     GPIO.output(motor_pin, GPIO.HIGH)
     time.sleep(6)
@@ -31,9 +30,8 @@ if __name__ == '__main__':
     rospy.loginfo("Node Initialised")
     while not go:
         sub = rospy.wait_for_message('tilt', String)
-        print(sub.data)
         if sub.data == 'True':
-            rospy.loginfo("Breaking")
+            rospy.loginfo("Shooting")
             break
         
     shoot()
