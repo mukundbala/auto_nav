@@ -8,28 +8,28 @@ from std_msgs.msg import String
 
 go = False
 servo_pin = 12
-motor_pin = 40
+motor_pin = 32
 
 def shoot():
     GPIO.setmode(GPIO.BOARD)
     GPIO.setup(servo_pin, GPIO.OUT)
     p = GPIO.PWM(servo_pin, 50)
-    actual = 2.5 + (70 * 10 /180)
-    p.start(actual)
-    #p.ChangeDutyCycle(actual)
-    time.sleep(2)
-    GPIO.setup(motor_pin, GPIO.OUT)
-    GPIO.output(motor_pin, GPIO.HIGH)
-    time.sleep(12)
-    GPIO.output(motor_pin, GPIO.LOW)
-    p.stop
+    actual = 2.5 + (70.0 * 10.0 / 180.0)
+    p.start(6.5)
+    p.ChangeDutyCycle(actual)
+    time.sleep(20)
+    #GPIO.setup(motor_pin, GPIO.OUT, initial=0)
+    #GPIO.output(motor_pin, True)
+    #time.sleep(8)
+    #GPIO.output(motor_pin, False)
+    #p.stop
     GPIO.cleanup()
-    time.sleep(100)
+    time.sleep(1000)
     rospy.signal_shutdown("Shutting down")
 
 
 if __name__ == '__main__':
-    rospy.init_node('pi_sub', anonymous=False disable_signals=True)
+    rospy.init_node('pi_sub', anonymous=False, disable_signals=True)
     rospy.loginfo("Node Initialised")
     while not go:
         sub = rospy.wait_for_message('tilt', String)
