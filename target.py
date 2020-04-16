@@ -25,15 +25,15 @@ def get_odom_dir(msg):
 	global yaw
 
 	orientation_quat =  msg.pose.pose.orientation
-    orientation_list = [orientation_quat.x, orientation_quat.y, orientation_quat.z, orientation_quat.w]
-    (roll, pitch, yaw) = euler_from_quaternion(orientation_list)
+	orientation_list = [orientation_quat.x, orientation_quat.y, orientation_quat.z, orientation_quat.w]
+    	(roll, pitch, yaw) = euler_from_quaternion(orientation_list)
 
 
 def get_laserscan(msg):
 	global laser_range
 
-	laser_range = np.array([msg.ranges])
-	laser_range[laser_range==0] = np.nan
+	laser_range = np.array(msg.ranges)
+	rospy.loginfo("Done getting ranges")
 
 
 def move_forward():
@@ -42,12 +42,13 @@ def move_forward():
 	pub = rospy.Publisher('cmd_vel', Twist, queue_size=10)
 	rate = rospy.Rate(5)
 
+        twist = Twist()
 	twist.linear.x = 0.05
 	twist.angular.z = 0.0
 	pub.publish(twist)
 
 	while True:
-		lr2 = (laser_range[-10, 10, 1]<0.4).nonzero()
+		lr2 = (laser_range[range(0, 10, 1)]<0.4).nonzero()
 		if len(lr2) > 0:
 			break
 
@@ -59,38 +60,38 @@ def move_forward():
 def pan():
 	global yaw, cX
 
-    if cX - 150 == 0:
-    	return
+    	if cX - 150 == 0:
+    		return
 
-    else:
-    	rot_angle = math.atan(cX / 100)
+	else:
+    		rot_angle = math.atan(cX / 100)
 
-    twist = Twist()
-    pub = rospy.Publisher('cmd_vel', Twist, queue_size=10)
-    rate = rospy.Rate(10)
+	twist = Twist()
+	pub = rospy.Publisher('cmd_vel', Twist, queue_size=10)
+        rate = rospy.Rate(10)
 
-    current_yaw = np.copy(yaw)
-    c_yaw = complex(math.cos(current_yaw),math.sin(current_yaw))
-    target_yaw = rot_angle
-    c_target_yaw = complex(math.cos(target_yaw),math.sin(target_yaw))
-    rospy.loginfo('Desired Yaw: ' + str(math.degrees(cmath.phase(c_target_yaw))))
-    c_change = c_target_yaw / c_yaw
-    c_change_dir = np.sign(c_change.imag)
-    twist.linear.x = 0.0
-    twist.angular.z = c_change_dir * 0.1
-    pub.publish(twist)
-
-    c_dir_diff = c_change_dir
-    while(c_change_dir * c_dir_diff > 0):
         current_yaw = np.copy(yaw)
         c_yaw = complex(math.cos(current_yaw),math.sin(current_yaw))
+        target_yaw = rot_angle
+        c_target_yaw = complex(math.cos(target_yaw),math.sin(target_yaw))
+        rospy.loginfo('Desired Yaw: ' + str(math.degrees(cmath.phase(c_target_yaw))))
         c_change = c_target_yaw / c_yaw
-        c_dir_diff = np.sign(c_change.imag)
-        rate.sleep()
+        c_change_dir = np.sign(c_change.imag)
+        twist.linear.x = 0.0
+        twist.angular.z = c_change_dir * 0.1
+        pub.publish(twist)
 
-    rospy.loginfo('End Yaw: ' + str(math.degrees(current_yaw)))
-    twist.angular.z = 0.0
-    pub.publish(twist)
+        c_dir_diff = c_change_dir
+        while(c_change_dir * c_dir_diff > 0):
+            current_yaw = np.copy(yaw)
+            c_yaw = complex(math.cos(current_yaw),math.sin(current_yaw))
+            c_change = c_target_yaw / c_yaw
+            c_dir_diff = np.sign(c_change.imag)
+            rate.sleep()
+
+        rospy.loginfo('End Yaw: ' + str(math.degrees(current_yaw)))
+        twist.angular.z = 0.0
+        pub.publish(twist)
 
 
 def tilt():
@@ -127,7 +128,7 @@ class TargetDetector:
 
 		self.lower = colourLower
 		self.upper = colourUpper
-		
+
 		self.t0 = time.time()
 
 		self.target_point = Point()
@@ -149,7 +150,6 @@ class TargetDetector:
 
 		rospy.loginfo("Loaded video stream.")
 
-		
 		np_arr = np.fromstring(data.data, np.uint8)
 		frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 		#frame = cv2.cvtColor(np.array(data), cv2.COLOR_RGB2BGR)
@@ -220,6 +220,8 @@ if __name__ == '__main__':
 	rospy.loginfo("Node initialised")
 	rospy.Subscriber('scan', LaserScan, get_laserscan)
 	rospy.Subscriber('odom', Odometry, get_odom_dir)
+	rospy.loginfo("Subscribed to topics")
+	time.sleep(2)
 	move_forward()
 	td = TargetDetector(colourLower, colourUpper)
 	pan()
