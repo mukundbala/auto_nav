@@ -10,19 +10,23 @@ go = False
 servo_pin = 12
 motor_pin = 32
 
-def shoot():
+def shoot(angle):
     GPIO.setmode(GPIO.BOARD)
     GPIO.setup(servo_pin, GPIO.OUT)
     p = GPIO.PWM(servo_pin, 50)
-    actual = 2.5 + (70.0 * 10.0 / 180.0)
-    p.start(6.5)
+    # Angle is offset from calibrated angle
+    x = 70 + angle
+    # Convert to PWM
+    actual = 2.5 + (x * 10.0 / 180.0)
+    p.start(actual)
     p.ChangeDutyCycle(actual)
-    time.sleep(20)
-    #GPIO.setup(motor_pin, GPIO.OUT, initial=0)
-    #GPIO.output(motor_pin, True)
-    #time.sleep(8)
-    #GPIO.output(motor_pin, False)
-    #p.stop
+    time.sleep(1)
+    GPIO.setup(motor_pin, GPIO.OUT, initial=0)
+    GPIO.output(motor_pin, True)
+    time.sleep(8)
+    GPIO.output(motor_pin, False)
+    time.sleep(1)
+    p.stop()
     GPIO.cleanup()
     time.sleep(1000)
     rospy.signal_shutdown("Shutting down")
@@ -31,10 +35,13 @@ def shoot():
 if __name__ == '__main__':
     rospy.init_node('pi_sub', anonymous=False, disable_signals=True)
     rospy.loginfo("Node Initialised")
+    angle = 0
     while not go:
         sub = rospy.wait_for_message('tilt', String)
-        if sub.data == 'True':
+        if len(sub.data) > 0:
+            angle = int(sub.data)
             rospy.loginfo("Shooting")
+            go = True
             break
-    shoot()
+    shoot(angle)
     rospy.spin()

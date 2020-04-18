@@ -61,18 +61,18 @@ def move_forward():
     time.sleep(1)
     pub.publish(twist)
 
-    # while True:
-    #     #rospy.loginfo("inside while loop")
-    #     lr2 = (laser_range[range(0, 5, 1)]<0.2).nonzero()
-    #     # print(lr2[0])
-    #     if len(lr2[0]) > 0:
-    #         #rospy.loginfo("exited loop")
-    #         break
+    while True:
+        #rospy.loginfo("inside while loop")
+        lr2 = (laser_range[range(0, 5, 1)]<0.3).nonzero()
+        # print(lr2[0])
+        if len(lr2[0]) > 0:
+            #rospy.loginfo("exited loop")
+            break
 
-    time.sleep(7)
     twist.linear.x = 0
     twist.angular.z = 0
     pub.publish(twist)
+    # We kill the node because there is electrical inteference with our servo
     os.system("rosnode kill /turtlebot3_lds")
     rospy.loginfo("Finished moving")
 
@@ -88,22 +88,21 @@ class TargetDetector:
 
         self.target_point = Point()
 
-        #self.image_pub = rospy.Publisher("/target/image_target",Image,queue_size=1)
-        #self.mask_pub = rospy.Publisher("/target/image_mask",Image,queue_size=1)
-        #self.target_pub = rospy.Publisher("/target/point_target",Point,queue_size=1)
         self.bridge = CvBridge()
         self.pan()
 
 
     def pan(self):
-        global cX
+        global cX, cY
 
         twist = Twist()
         pub = rospy.Publisher('cmd_vel', Twist, queue_size=10)
         tilt = rospy.Publisher('tilt', String, queue_size=10)
         rate = rospy.Rate(10)
 
+        # As long as the target is within this x range, we are more than likely to hit it
         while not -50 <= cX <= 50:
+            # We wait for message instead of subscribe so as to only execute the callback only once
             self.image_sub = rospy.wait_for_message("/raspicam_node/image/compressed",CompressedImage)
             self.callback(self.image_sub)
             if cX == 1000:
@@ -123,8 +122,11 @@ class TargetDetector:
         twist.angular.z = 0
         time.sleep(0.5)
         pub.publish(twist)
+        # Kill camera to reduce electrical inteference
         os.system("rosnode kill /raspicam_node")
-        tilt.publish('True')
+        # Send tilt data to node on the pi
+        angle = math.atan2(cY, 500)
+        tilt.publish(str(angle))
         rospy.loginfo("Now firing")
 
 
@@ -132,46 +134,37 @@ class TargetDetector:
         global cX, cY
 
         if data == None:
-            rospy.loginfo("Video not found")
-            rospy.logerr("LOL")
+            rospy.logerr("Video not found")
             time.sleep(1000)
 
         #rospy.loginfo("Loaded video stream.")
-
         np_arr = np.fromstring(data.data, np.uint8)
         frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-        #frame = cv2.cvtColor(np.array(data), cv2.COLOR_RGB2BGR)
 
-
-        # resize the frame, blur it, and convert it to the HSV
-        # color space
+        # Resize the frame, blur it, and then convert it to the HSV
         frame = imutils.resize(frame, width=600)
         blurred = cv2.GaussianBlur(frame, (11, 11), 0)
         hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
 
-        # construct a mask for the color, then perform
-        # a series of dilations and erosions to remove any small
-        # blobs left in the mask
+        # Create a mask for the color so as to ignore everything else
         mask = cv2.inRange(hsv, self.lower, self.upper)
         mask = cv2.erode(mask, None, iterations=2)
         mask = cv2.dilate(mask, None, iterations=2)
         #cv2.imshow("mask", mask), cv2.waitKey(1)
 
-        # find contours in the mask and initialize the current
-        # (x, y) center of the ball
+        # Find contours in the mask and get the center of it
         cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         cnts = imutils.grab_contours(cnts)
         center = None
 
-        # only proceed if at least one contour was found
         if len(cnts) > 0:
-            # find the largest contour in the mask, then use
-            # it to compute the minimum enclosing circle and
-            # centroid
+            # Find the biggest contour
             c = max(cnts, key=cv2.contourArea)
             x,y,w,h = cv2.boundingRect(c)
+            # Draw a rectangle in green around the target for visualisation
             cv2.rectangle(frame,(x,y),(x+w,y+h),(0,255,0),2)
             M = cv2.moments(c)
+            # Use calibration constants to shif the origin to our perfect pan & tilt orientation
             cX = int(M["m10"] / M["m00"] - 285)
             cY = int(M["m01"] / M["m00"] - 100)
             print(str(cX) + ', ' + str(cY))
