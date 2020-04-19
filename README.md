@@ -7,4 +7,4 @@ To locate and fire at a target, no furhter than 2m away, identified as one of th
 Mapping is the primary objective, with target location and firing the secondary objective. 
 
 # Autonomous Navigation
-Using 
+Autonomous Navigation is achieved by using occupancy data to find the next accessible unmapped region and sending the coordinates to the navigation stack which will move the robot to the specified coordinates. The unmapped region is found by using OpenCV image manipulation processes on the occupancy data. Once there are no more unmapped regions, the robot will stop and save the map and time taken. 
